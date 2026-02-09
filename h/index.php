@@ -1,32 +1,34 @@
 <?php
     session_start();
-    include_once("connectdb.php"); 
+    // แก้ชื่อไฟล์ให้ตรงเป๊ะๆ ตามรูปที่คุณส่งมา (connectDB.php)
+    include_once("connectDB.php"); 
 
-    // ตัวแปรสำหรับเก็บคำสั่ง JavaScript เพื่อแสดงผล SweetAlert
     $msg_script = ""; 
 
     if (isset($_POST['Submit'])) {
-        // 1. ตรวจสอบว่าตัวแปร $4090db มีตัวตนและเชื่อมต่อสำเร็จหรือไม่
-        if (!isset($4090db) || !$4090db) {
+        
+        // 1. เช็คว่ามีตัวแปร $conn จากไฟล์ connectDB.php หรือไม่
+        if (!isset($conn) || !$conn) {
             $msg_script = "Swal.fire({
                 icon: 'error',
-                title: 'การเชื่อมต่อผิดพลาด',
-                text: 'ไม่พบตัวแปร \$4090db หรือเชื่อมต่อฐานข้อมูลไม่ได้'
+                title: 'เชื่อมต่อฐานข้อมูลไม่ได้',
+                text: 'ไม่พบตัวแปร \$conn หรือชื่อไฟล์ connectDB.php ไม่ตรง'
             });";
         } else {
             $user = $_POST['auser'];
             $pass = $_POST['apwd'];
 
-            // 2. เตรียมคำสั่ง SQL
+            // 2. ใช้ $conn ตามในไฟล์ connectDB.php ของคุณ
             $sql = "SELECT a_id, a_name, a_password FROM admin WHERE a_username = ?";
             
-            if ($stmt = mysqli_prepare($4090db, $sql)) {
+            if ($stmt = mysqli_prepare($conn, $sql)) {
                 mysqli_stmt_bind_param($stmt, "s", $user);
                 mysqli_stmt_execute($stmt);
                 $result = mysqli_stmt_get_result($stmt);
                 
                 if ($row = mysqli_fetch_assoc($result)) {
-                    // 3. ตรวจสอบรหัสผ่าน (รองรับการ Hash ด้วย password_hash)
+                    // 3. ตรวจสอบรหัสผ่าน
+                    // ถ้าใน Database เก็บเป็นรหัสธรรมดา (ไม่ได้ Hash) ให้เปลี่ยนบรรทัดนี้เป็น: if ($pass == $row['a_password']) {
                     if (password_verify($pass, $row['a_password'])) {
                         
                         $_SESSION['a_id'] = $row['a_id'];
@@ -43,29 +45,25 @@
                         });";
                         
                     } else {
-                        // กรณีรหัสผ่านไม่ถูกต้อง
                         $msg_script = "Swal.fire({
                             icon: 'error',
-                            title: 'ล็อคอินไม่สำเร็จ',
-                            text: 'รหัสผ่านผิด (Password Incorrect)'
+                            title: 'รหัสผ่านผิด',
+                            text: 'กรุณาลองใหม่อีกครั้ง'
                         });";
                     }
-                    
                 } else {
-                    // กรณีไม่พบชื่อผู้ใช้
                     $msg_script = "Swal.fire({
                         icon: 'warning',
                         title: 'ไม่พบผู้ใช้',
-                        text: 'ไม่พบชื่อผู้ใช้ \"" . htmlspecialchars($user) . "\" ในระบบ'
+                        text: 'ไม่พบ Username นี้ในระบบ'
                     });";
                 }
                 mysqli_stmt_close($stmt);
             } else {
-                // กรณี Query มีปัญหา
                 $msg_script = "Swal.fire({
                     icon: 'error',
                     title: 'SQL Error',
-                    text: '" . addslashes(mysqli_error($4090db)) . "'
+                    text: '" . addslashes(mysqli_error($conn)) . "'
                 });";
             }
         }
@@ -134,7 +132,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        // แสดงการแจ้งเตือนจาก PHP
         <?php echo $msg_script; ?>
     </script>
 </body>
