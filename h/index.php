@@ -1,6 +1,75 @@
 <?php
     session_start();
     include_once("connectdb.php"); 
+
+    // ตัวแปรสำหรับเก็บคำสั่ง JavaScript เพื่อแสดงผล SweetAlert
+    $msg_script = ""; 
+
+    if (isset($_POST['Submit'])) {
+        // 1. ตรวจสอบว่าตัวแปร $4090db มีตัวตนและเชื่อมต่อสำเร็จหรือไม่
+        if (!isset($4090db) || !$4090db) {
+            $msg_script = "Swal.fire({
+                icon: 'error',
+                title: 'การเชื่อมต่อผิดพลาด',
+                text: 'ไม่พบตัวแปร \$4090db หรือเชื่อมต่อฐานข้อมูลไม่ได้'
+            });";
+        } else {
+            $user = $_POST['auser'];
+            $pass = $_POST['apwd'];
+
+            // 2. เตรียมคำสั่ง SQL
+            $sql = "SELECT a_id, a_name, a_password FROM admin WHERE a_username = ?";
+            
+            if ($stmt = mysqli_prepare($4090db, $sql)) {
+                mysqli_stmt_bind_param($stmt, "s", $user);
+                mysqli_stmt_execute($stmt);
+                $result = mysqli_stmt_get_result($stmt);
+                
+                if ($row = mysqli_fetch_assoc($result)) {
+                    // 3. ตรวจสอบรหัสผ่าน (รองรับการ Hash ด้วย password_hash)
+                    if (password_verify($pass, $row['a_password'])) {
+                        
+                        $_SESSION['a_id'] = $row['a_id'];
+                        $_SESSION['a_name'] = $row['a_name'];
+                        
+                        $msg_script = "Swal.fire({
+                            icon: 'success',
+                            title: 'เข้าสู่ระบบสำเร็จ',
+                            text: 'ยินดีต้อนรับคุณ " . $row['a_name'] . "',
+                            showConfirmButton: false,
+                            timer: 1500
+                        }).then(() => {
+                            window.location='index2.php';
+                        });";
+                        
+                    } else {
+                        // กรณีรหัสผ่านไม่ถูกต้อง
+                        $msg_script = "Swal.fire({
+                            icon: 'error',
+                            title: 'ล็อคอินไม่สำเร็จ',
+                            text: 'รหัสผ่านผิด (Password Incorrect)'
+                        });";
+                    }
+                    
+                } else {
+                    // กรณีไม่พบชื่อผู้ใช้
+                    $msg_script = "Swal.fire({
+                        icon: 'warning',
+                        title: 'ไม่พบผู้ใช้',
+                        text: 'ไม่พบชื่อผู้ใช้ \"" . htmlspecialchars($user) . "\" ในระบบ'
+                    });";
+                }
+                mysqli_stmt_close($stmt);
+            } else {
+                // กรณี Query มีปัญหา
+                $msg_script = "Swal.fire({
+                    icon: 'error',
+                    title: 'SQL Error',
+                    text: '" . addslashes(mysqli_error($4090db)) . "'
+                });";
+            }
+        }
+    }
 ?>
 <!doctype html>
 <html lang="th">
@@ -26,22 +95,18 @@
             width: 100%;
             max-width: 400px;
             border-radius: 15px;
-            border: none;
             box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            border: none;
         }
         .btn-login {
             background-color: #764ba2;
             border: none;
             padding: 12px;
-            font-size: 1.1rem;
             transition: 0.3s;
         }
-        .btn-login:hover {
-            background-color: #5a367f;
-        }
+        .btn-login:hover { background-color: #5a367f; }
     </style>
 </head>
-
 <body>
 
     <div class="card login-card">
@@ -51,15 +116,13 @@
 
             <form method="post" action="">
                 <div class="form-floating mb-3">
-                    <input type="text" class="form-control" id="floatingInput" name="auser" placeholder="Username" autofocus required>
+                    <input type="text" class="form-control" id="floatingInput" name="auser" placeholder="Username" required autofocus>
                     <label for="floatingInput"><i class="bi bi-person-fill"></i> Username</label>
                 </div>
-
                 <div class="form-floating mb-4">
                     <input type="password" class="form-control" id="floatingPassword" name="apwd" placeholder="Password" required>
                     <label for="floatingPassword"><i class="bi bi-lock-fill"></i> Password</label>
                 </div>
-
                 <div class="d-grid">
                     <button type="submit" name="Submit" class="btn btn-primary btn-login text-white rounded-pill">
                         เข้าสู่ระบบ
@@ -70,84 +133,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <?php
-    if (isset($_POST['Submit'])) {
-        // 1. ตรวจสอบการเชื่อมต่อฐานข้อมูล
-        if (!$conn) {
-            echo "<script>
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Database Error',
-                    text: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบไฟล์ connectdb.php'
-                });
-            </script>";
-        } else {
-            $user = $_POST['auser'];
-            $pass = $_POST['apwd'];
-
-            $sql = "SELECT a_id, a_name, a_password FROM admin WHERE a_username = ?";
-            
-            if ($stmt = mysqli_prepare($conn, $sql)) {
-                mysqli_stmt_bind_param($stmt, "s", $user);
-                mysqli_stmt_execute($stmt);
-                $result = mysqli_stmt_get_result($stmt);
-                
-                if ($row = mysqli_fetch_assoc($result)) {
-                    // 2. ตรวจสอบรหัสผ่าน (ใช้ password_verify สำหรับรหัสที่ผ่านการ Hash)
-                    if (password_verify($pass, $row['a_password'])) {
-                        
-                        $_SESSION['a_id'] = $row['a_id'];
-                        $_SESSION['a_name'] = $row['a_name'];
-                        
-                        echo "<script>
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'เข้าสู่ระบบสำเร็จ',
-                                text: 'ยินดีต้อนรับคุณ " . $row['a_name'] . "',
-                                showConfirmButton: false,
-                                timer: 1500
-                            }).then(() => {
-                                window.location='index2.php';
-                            });
-                        </script>";
-                        
-                    } else {
-                        // กรณีรหัสผ่านไม่ถูกต้อง
-                        echo "<script>
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'เข้าสู่ระบบไม่ได้',
-                                text: 'รหัสผ่าน (Password) ไม่ถูกต้อง!'
-                            });
-                        </script>";
-                    }
-                    
-                } else {
-                    // กรณีไม่ชื่อผู้ใช้นี้ในระบบ
-                    echo "<script>
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'ไม่พบผู้ใช้งาน',
-                            text: 'ชื่อผู้ใช้ (Username) นี้ไม่มีอยู่ในระบบ'
-                        });
-                    </script>";
-                }
-                mysqli_stmt_close($stmt);
-            } else {
-                // กรณีคำสั่ง SQL ผิดพลาด
-                $error_msg = mysqli_error($conn);
-                echo "<script>
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'SQL Error',
-                        text: '" . addslashes($error_msg) . "'
-                    });
-                </script>";
-            }
-        }
-    }
-    ?>
+    <script>
+        // แสดงการแจ้งเตือนจาก PHP
+        <?php echo $msg_script; ?>
+    </script>
 </body>
 </html>
